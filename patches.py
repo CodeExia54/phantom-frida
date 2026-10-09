@@ -529,6 +529,15 @@ def get_binary_string_patches(name: str) -> list[tuple[str, str, str]]:
         #
         # "FRIDA\0" -> "XBNDL\0"
         ("465249444100", "58424e444c00", 'residual "FRIDA\\0" -> "XBNDL\\0"'),
+        # __FILE__ assertion-path fragments left in rodata by g_assert/g_critical,
+        # e.g. "../subprojects/frida-gum/bindings/gumjs/gumv8stalker.cpp". These
+        # are never string-compared at runtime (abort-message text only), so a
+        # same-length mask is safe and removes the "frida" substring a /proc/mem
+        # scanner keys on. Does NOT touch re.frida.* (protocol) or capital Frida.
+        # "frida-gum"  -> "linux-gum"
+        ("66726964612d67756d", "6c696e75782d67756d", 'path "frida-gum" -> "linux-gum"'),
+        # "frida-core" -> "linux-core"
+        ("66726964612d636f7265", "6c696e75782d636f7265", 'path "frida-core" -> "linux-core"'),
     ]
 
 
