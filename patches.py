@@ -590,6 +590,30 @@ def get_internal_patches(name: str, cap_name: str) -> list[tuple[str, str]]:
 # ============================================================================
 
 
+def get_jit_tag_patches(name: str) -> list[tuple[str, str, str]]:
+    """Tag Gum's executable (Stalker code cache / Interceptor trampoline / any
+    RX/RWX) allocations with an anonymous-VMA name "<name>-jit" via prctl, so a
+    cooperating kernel module can hide ONLY our JIT regions by that marker —
+    never the app's own JIT (e.g. [anon:dalvik-jit-code-cache]).
+
+    Patched at the single page-aligned exec mmap in gum_allocate_page_aligned.
+    prctl is declared extern (bionic libc provides it) so no new include is
+    needed; PROT_EXEC/MAP_FAILED already come from <sys/mman.h> in this file.
+    PR_SET_VMA=0x53564d41, PR_SET_VMA_ANON_NAME=0. Best-effort (return ignored).
+    """
+    f = "subprojects/frida-gum/gum/backend-posix/gummemory-posix.c"
+    old = "  result = mmap (address, size, prot, base_flags | region_flags, -1, 0);\n"
+    new = (
+        "  result = mmap (address, size, prot, base_flags | region_flags, -1, 0);\n"
+        "  if (result != MAP_FAILED && (prot & PROT_EXEC) != 0)\n"
+        "  {\n"
+        "    extern int prctl (int, ...);\n"
+        f'    prctl (0x53564d41, 0, (unsigned long) result, size, (unsigned long) "{name}-jit");\n'
+        "  }\n"
+    )
+    return [(f, old, new)]
+
+
 def get_stability_patches_17(frida_dir: Path) -> list[dict]:
     """
     Optional stability fixes for Frida 17.x.

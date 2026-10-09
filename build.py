@@ -42,6 +42,7 @@ from patches import (
     get_binary_patches,
     get_binary_string_patches,
     get_internal_patches,
+    get_jit_tag_patches,
     get_memory_signature_patches,
     get_port_patches,
     get_required_file_patches,
@@ -1289,6 +1290,11 @@ def apply_extended_patches(frida_dir: Path, custom_name: str, port: int | None):
         count = replace_in_tree(frida_dir, old, new)
         if count:
             log(f"  Temp paths: {old} -> {new} ({count})", "OK")
+
+    # --- Tag Gum JIT/exec allocations with [anon:<name>-jit] for kernel cloak ---
+    for relpath, old, new in get_jit_tag_patches(custom_name):
+        count = replace_in_file(frida_dir / relpath, old, new)
+        log(f"  JIT anon-tag: {relpath} ({count})", "OK" if count else "WARN")
 
     log("Extended patches complete", "OK")
 
