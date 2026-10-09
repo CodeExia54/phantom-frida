@@ -596,7 +596,12 @@ def get_jit_tag_patches(name: str) -> list[tuple[str, str, str]]:
     cooperating kernel module can hide ONLY our JIT regions by that marker —
     never the app's own JIT (e.g. [anon:dalvik-jit-code-cache]).
 
-    Patched at the single page-aligned exec mmap in gum_allocate_page_aligned.
+    Patched at the page-aligned mmap in gum_allocate_page_aligned. We name any
+    RW or RX allocation (not EXEC-only): under strict_wx, Frida maps code RW
+    first and mprotect()s it to RX later, so naming only at EXEC-time would miss
+    it. Naming RW|RX at mmap tags the code page before the W^X flip (the anon
+    name survives the later mprotect/VMA split). Data heaps get named too, which
+    also removes their residual strings from a maps-driven /proc/mem scan.
     prctl is declared extern (bionic libc provides it) so no new include is
     needed; PROT_EXEC/MAP_FAILED already come from <sys/mman.h> in this file.
     PR_SET_VMA=0x53564d41, PR_SET_VMA_ANON_NAME=0. Best-effort (return ignored).
@@ -605,7 +610,7 @@ def get_jit_tag_patches(name: str) -> list[tuple[str, str, str]]:
     old = "  result = mmap (address, size, prot, base_flags | region_flags, -1, 0);\n"
     new = (
         "  result = mmap (address, size, prot, base_flags | region_flags, -1, 0);\n"
-        "  if (result != MAP_FAILED && (prot & PROT_EXEC) != 0)\n"
+        "  if (result != MAP_FAILED && (prot & (PROT_EXEC | PROT_WRITE)) != 0)\n"
         "  {\n"
         "    extern int prctl (int, ...);\n"
         f'    prctl (0x53564d41, 0, (unsigned long) result, size, (unsigned long) "{name}-jit");\n'
